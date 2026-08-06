@@ -1,8 +1,9 @@
 #ifndef STORAGE_H
 #define STORAGE_H
 
-#include <stdbool.h>   // 🔥 यह Include जोड़ा गया
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>      // 🔥 FILE के लिए – यह लाइन जोड़ी गई है
 #include "pcapng.h"
 
 #ifdef __cplusplus
