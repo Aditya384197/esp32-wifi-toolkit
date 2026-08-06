@@ -1,5 +1,68 @@
 #include "utils.h"
 #include "esp_rom_sys.h"
+#include "driver/uart.h"
+#include <stdio.h>
+
+// ============================
+// UART Configuration (Serial Input)
+// ============================
+#define UART_NUM UART_NUM_0
+#define BUF_SIZE 128
+
+static void uart_init_for_input(void) {
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    };
+    uart_param_config(UART_NUM, &uart_config);
+    uart_set_pin(UART_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
+                 UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_driver_install(UART_NUM, BUF_SIZE * 2, 0, 0, NULL, 0);
+}
+
+// ============================
+// Serial Input Helpers (UART-based)
+// ============================
+int readCharFromSerial(void) {
+    static bool initialized = false;
+    if (!initialized) {
+        uart_init_for_input();
+        initialized = true;
+    }
+    uint8_t c;
+    int len = uart_read_bytes(UART_NUM, &c, 1, pdMS_TO_TICKS(10));
+    if (len > 0) {
+        return (int)c;
+    }
+    return -1;  // No data
+}
+
+int readIntFromSerial(void) {
+    char buf[16] = {0};
+    int idx = 0;
+    while (1) {
+        int c = readCharFromSerial();
+        if (c == -1) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        if (c == '\n' || c == '\r') break;
+        if (idx < 15 && c >= '0' && c <= '9') {
+            buf[idx++] = (char)c;
+        }
+    }
+    return atoi(buf);
+}
+
+void serialFlush(void) {
+    uint8_t dump[32];
+    while (uart_read_bytes(UART_NUM, dump, sizeof(dump), pdMS_TO_TICKS(10)) > 0) {
+        // discard
+    }
+}
 
 // ============================
 // MAC Helpers
@@ -39,7 +102,8 @@ bool setChannel(uint8_t ch) {
     }
     return true;
 }
- bool enablePromiscuous(uint32_t filterMask, wifi_promiscuous_cb_t cb) {
+
+bool enablePromiscuous(uint32_t filterMask, wifi_promiscuous_cb_t cb) {
     wifi_promiscuous_filter_t f = { .filter_mask = filterMask };
     esp_err_t e1 = esp_wifi_set_promiscuous_filter(&f);
     esp_err_t e2 = esp_wifi_set_promiscuous_rx_cb(cb);
@@ -130,30 +194,4 @@ bool nvs_bssid_cache_flush(nvs_bssid_cache_t* cache) {
 
 size_t nvs_bssid_cache_count(nvs_bssid_cache_t* cache) {
     return cache->count;
-}
-
-// ============================
-// Serial Input Helpers
-// ============================
-int readIntFromSerial(void) {
-    char buf[16] = {0};
-    int i = 0;
-    while (1) {
-        char c = getchar();
-        if (c == '\n' || c == '\r') break;
-        if (i < 15 && c >= '0' && c <= '9') buf[i++] = c;
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    return atoi(buf);
-}
-
-char readCharFromSerial(void) {
-    char c = getchar();
-    return c;
-}
-
-void serialFlush(void) {
-    while (getchar() != EOF) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
 }
