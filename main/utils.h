@@ -114,7 +114,7 @@ size_t nvs_bssid_cache_count(nvs_bssid_cache_t* cache);
 // Serial Input Helpers
 // ============================
 int readIntFromSerial(void);
-char readCharFromSerial(void);
+int readCharFromSerial(void);
 void serialFlush(void);
 
 #endif // UTILS_H
