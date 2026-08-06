@@ -78,13 +78,7 @@ static Session* _createSession(const uint8_t* bssid, const uint8_t* sta) {
     return &_sessions[oldest];
 }
 
-static void _expireSessions(uint32_t timeoutMs) {
-    uint32_t now = millis();
-    for (int i = 0; i < MAX_SESSIONS; i++) {
-        if (_sessions[i].flags.active && (now - _sessions[i].created_ms) > timeoutMs)
-            _sessions[i].flags.active = false;
-    }
-}
+// 🔥 _expireSessions() हटा दी गई – कहीं उपयोग नहीं थी
 
 static void _hsParseEapol(const uint8_t* bssid, const uint8_t* sta,
                           const uint8_t* eapol, uint16_t len, int8_t rssi,
