@@ -144,7 +144,7 @@ void app_main(void) {
         autoTargetLoop();
 
         if (getchar() != EOF) {
-            char choice = readCharFromSerial();
+            int choice = readCharFromSerial();
             serialFlush();
             if (choice == '\n' || choice == '\r') continue;
             printf("%c\n", choice);
