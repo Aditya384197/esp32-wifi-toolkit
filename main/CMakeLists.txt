@@ -26,11 +26,16 @@ idf_component_register(
         mbedtls
         spiffs
         driver
-        esp_timer          # 🔥 यह लाइन जोड़ें
+        esp_timer
 )
 
-target_compile_options(${COMPONENT_LIB} PRIVATE
-    -Wno-format
+# 🔥 Size Optimization (App Size कम करने के लिए)
+target_compile_options(${COMPONENT_LIB} PRIVATE 
+    -Wno-format 
     -Wno-incompatible-pointer-types
     -Wno-error=int-conversion
+    -Os                    # 🔥 Size Optimization (Speed की बजाय Size)
 )
+
+# 🔥 Partition Table का Path Set करें (नई partitions.csv के लिए)
+set(IDF_PARTITION_TABLE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/partitions.csv)
