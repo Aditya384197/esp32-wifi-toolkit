@@ -219,7 +219,7 @@ static void _hsParseEapol(const uint8_t* bssid, const uint8_t* sta,
     }
 }
 
-RING_BUFFER_DECLARE(pa, 64, 400) // reuse from packet_analyzer
+RING_BUFFER_DECLARE(pa, 64, 512) // reuse from packet_analyzer
 static pa_ring_t _paRingHS;
 
 static void IRAM_ATTR _hsISR(void* buf, wifi_promiscuous_pkt_type_t) {
