@@ -1,6 +1,6 @@
 #include "storage.h"
 #include <stdio.h>
-#include <stdbool.h>   // 🔥 यह पहले से था, पर अब हटाने की ज़रूरत नहीं
+#include <stdbool.h>
 
 bool pcapng_logger_open(PcapngFileLogger* logger, const char* path) {
     if (logger->open) pcapng_logger_close(logger);
