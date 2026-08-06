@@ -25,9 +25,27 @@ jobs:
           idf.py set-target esp32
           idf.py build
 
+    - name: Merge Firmware into Single Binary
+      run: |
+        # 🔥 तीनों फाइलों को एक साथ मर्ज करें
+        esptool.py --chip esp32 merge_bin \
+          -o build/esp32_wifi_toolkit_merged.bin \
+          --flash_mode dio \
+          --flash_size 2MB \
+          0x1000 build/bootloader/bootloader.bin \
+          0x8000 build/partition_table/partition-table.bin \
+          0x10000 build/esp32_wifi_toolkit.bin
+
+        # (Optional) अगर phy_init_data.bin मौजूद है, तो उसे भी 0xF000 पर जोड़ें
+        # 0xF000 build/phy_init_data.bin
+
+        echo "✅ Merged binary created: build/esp32_wifi_toolkit_merged.bin"
+
     - name: Upload Firmware Artifact
       uses: actions/upload-artifact@v4
       with:
         name: esp32-wifi-toolkit-firmware
-        path: build/**/*.bin
+        path: |
+          build/**/*.bin
+          build/esp32_wifi_toolkit_merged.bin
         retention-days: 30
