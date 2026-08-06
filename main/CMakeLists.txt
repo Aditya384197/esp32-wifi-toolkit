@@ -26,6 +26,7 @@ idf_component_register(
         mbedtls
         spiffs
         driver
+        esp_timer          # 🔥 यह लाइन जोड़ें
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE
