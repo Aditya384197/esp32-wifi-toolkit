@@ -1,12 +1,11 @@
 #include "storage.h"
 #include <stdio.h>
-#include <string.h>
+#include <stdbool.h>   // 🔥 यह Include जोड़ा गया
 
 bool pcapng_logger_open(PcapngFileLogger* logger, const char* path) {
     if (logger->open) pcapng_logger_close(logger);
     FILE* f = fopen(path, "ab");
     if (!f) return false;
-    // Check if file is empty (new)
     fseek(f, 0, SEEK_END);
     if (ftell(f) == 0) {
         uint8_t hdr[48];
@@ -15,7 +14,7 @@ bool pcapng_logger_open(PcapngFileLogger* logger, const char* path) {
     }
     logger->file = f;
     logger->open = true;
-    return true;
+    return true;       // 🔥 Return जोड़ा गया
 }
 
 void pcapng_logger_write(PcapngFileLogger* logger, const uint8_t* data, size_t len,
