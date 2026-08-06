@@ -55,15 +55,27 @@ static int scoreAp(const ApRecord* ap) {
 void wifiScanner(void) {
     LOG_I(TAG_SCAN, "Scanning...");
 
-    // Register event handler for scan
+    // 🔥 Step 1: WiFi को पूरी तरह Reset करें (Force STA Mode)
+    esp_wifi_disconnect();
+    vTaskDelay(pdMS_TO_TICKS(100));
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    esp_wifi_start();
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    // 🔥 Step 2: Event Group बनाएँ (अगर पहले से नहीं)
     if (!_scanEventGroup) {
         _scanEventGroup = xEventGroupCreate();
+        if (!_scanEventGroup) {
+            LOG_E(TAG_SCAN, "Failed to create event group!");
+            return;
+        }
         esp_event_handler_instance_t instance;
         esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE,
                                             &_scan_event_handler, NULL, &instance);
     }
 
-    // Start scan
+    // 🔥 Step 3: Scan शुरू करें
     wifi_scan_config_t scan_cfg = {
         .ssid = NULL,
         .bssid = NULL,
@@ -73,22 +85,34 @@ void wifiScanner(void) {
         .scan_time = { .active = { .min = 100, .max = 300 } }
     };
     _scanDone = false;
+    // Clear previous bits
+    xEventGroupClearBits(_scanEventGroup, SCAN_DONE_BIT);
+
     esp_err_t err = esp_wifi_scan_start(&scan_cfg, false);
     if (err != ESP_OK) {
         LOG_E(TAG_SCAN, "Scan start failed: %s", esp_err_to_name(err));
         return;
     }
 
-    // Wait for scan completion
-    xEventGroupWaitBits(_scanEventGroup, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
-    if (!_scanDone) {
-        LOG_E(TAG_SCAN, "Scan timeout");
+    // 🔥 Step 4: Scan Complete होने तक Wait करें (Timeout 10 सेकंड)
+    EventBits_t bits = xEventGroupWaitBits(_scanEventGroup, SCAN_DONE_BIT,
+                                           pdTRUE, pdFALSE, pdMS_TO_TICKS(10000));
+    if (!(bits & SCAN_DONE_BIT)) {
+        LOG_E(TAG_SCAN, "Scan timeout (no networks or WiFi issue)");
+        // 🔥 अगर Timeout हो, तो WiFi को रीसेट करें और Return करें
+        esp_wifi_stop();
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_wifi_start();
         return;
     }
 
-    // Get results
+    // 🔥 Step 5: Results लें
     uint16_t ap_num = 0;
-    esp_wifi_scan_get_ap_num(&ap_num);
+    err = esp_wifi_scan_get_ap_num(&ap_num);
+    if (err != ESP_OK) {
+        LOG_E(TAG_SCAN, "Failed to get AP count: %s", esp_err_to_name(err));
+        return;
+    }
     if (ap_num == 0) {
         LOG_I(TAG_SCAN, "No networks found.");
         _apCount = 0;
@@ -101,7 +125,12 @@ void wifiScanner(void) {
         LOG_E(TAG_SCAN, "Memory allocation failed");
         return;
     }
-    esp_wifi_scan_get_ap_records(&_apCount, records);
+    err = esp_wifi_scan_get_ap_records(&_apCount, records);
+    if (err != ESP_OK) {
+        LOG_E(TAG_SCAN, "Failed to get AP records: %s", esp_err_to_name(err));
+        free(records);
+        return;
+    }
 
     // Fill cache
     for (int i = 0; i < _apCount; i++) {
@@ -115,10 +144,8 @@ void wifiScanner(void) {
         ap->enc = (uint8_t)records[i].authmode;
         ap->captured = false;
         ap->attempts = 0;
-        // 🔥 WPS डिटेक्शन हटाया गया – ESP-IDF के wifi_ap_record_t में ies/ies_len सीधे नहीं हैं
         ap->wps = false;
     }
-
     free(records);
 
     // Print table
