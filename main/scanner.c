@@ -115,20 +115,8 @@ void wifiScanner(void) {
         ap->enc = (uint8_t)records[i].authmode;
         ap->captured = false;
         ap->attempts = 0;
-
-        // WPS detection
+        // 🔥 WPS डिटेक्शन हटाया गया – ESP-IDF के wifi_ap_record_t में ies/ies_len सीधे नहीं हैं
         ap->wps = false;
-        if (records[i].ies_len > 0) {
-            const uint8_t* ies = records[i].ies;
-            for (int j = 0; j < records[i].ies_len - 5; j++) {
-                if (ies[j] == 0xDD && ies[j+1] >= 4 &&
-                    ies[j+2] == 0x00 && ies[j+3] == 0x50 &&
-                    ies[j+4] == 0xF2 && ies[j+5] == 0x04) {
-                    ap->wps = true;
-                    break;
-                }
-            }
-        }
     }
 
     free(records);
