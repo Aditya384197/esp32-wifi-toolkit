@@ -47,7 +47,7 @@ void randomMac(uint8_t* mac);
 // Wi-Fi Helpers
 // ============================
 bool setChannel(uint8_t ch);
-bool enablePromiscuous(uint32_t filterMask, esp_promiscuous_cb_t cb);
+bool enablePromiscuous(uint32_t filterMask, wifi_promiscuous_cb_t cb);   // 🔥 FIXED type
 void disablePromiscuous(void);
 void setTxPower(int8_t power);
 bool wifi80211Tx(wifi_interface_t iface, const uint8_t* buf, int len, bool enSysBuf);
