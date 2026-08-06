@@ -39,8 +39,7 @@ bool setChannel(uint8_t ch) {
     }
     return true;
 }
-
-bool enablePromiscuous(uint32_t filterMask, esp_promiscuous_cb_t cb) {
+ bool enablePromiscuous(uint32_t filterMask, wifi_promiscuous_cb_t cb) {
     wifi_promiscuous_filter_t f = { .filter_mask = filterMask };
     esp_err_t e1 = esp_wifi_set_promiscuous_filter(&f);
     esp_err_t e2 = esp_wifi_set_promiscuous_rx_cb(cb);
