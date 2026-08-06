@@ -1,0 +1,33 @@
+name: Build ESP32 WiFi Toolkit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Setup ESP-IDF
+      uses: espressif/esp-idf-ci-action@v1
+      with:
+        esp_idf_version: v5.3.2
+        command: |
+          idf.py set-target esp32
+          idf.py build
+
+    - name: Upload Firmware Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32-wifi-toolkit-firmware
+        path: build/**/*.bin
+        retention-days: 30
