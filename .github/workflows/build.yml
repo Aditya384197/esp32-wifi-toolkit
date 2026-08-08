@@ -1,4 +1,4 @@
-name: Build ESP8266 MicroHack (Ultra Aggressive)
+name: Build esp32-wifi-toolkit
 
 on:
   push:
@@ -17,10 +17,10 @@ jobs:
       - name: Install Arduino CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-          $HOME/bin/arduino-cli config init
-          $HOME/bin/arduino-cli core update-index
-          $HOME/bin/arduino-cli core install esp8266:esp8266
+          ./bin/arduino-cli config init
+          ./bin/arduino-cli core update-index
+          ./bin/arduino-cli core install esp8266:esp8266
 
       - name: Compile sketch (ESP8266)
         run: |
-          $HOME/bin/arduino-cli compile --fqbn esp8266:esp8266:generic esp32-wifi-toolkit.ino
+          ./bin/arduino-cli compile --fqbn esp8266:esp8266:generic esp32-wifi-toolkit.ino
